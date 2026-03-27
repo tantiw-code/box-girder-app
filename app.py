@@ -80,7 +80,24 @@ def compute_section(B, H, T1, T2, T3, T4, D=50.0, C=50.0, B2=50.0,
         B=B, H=H, T1=T1, T2=T2, T3=T3, T4=T4,
         D=D, C=C, B2=B2,
         Str=Str, Cr=Cr, Web=Web, x=x, Rail=Rail,
+        # จะถูก set ใน compute_weight() ด้านล่าง
+        W_girder=None,
     )
+
+
+def compute_weight(sec, SPAN_m):
+    """
+    น้ำหนัก Double Girder ทั้งหมด [Ton]
+    ← Excel AJ31 (Walk sheet):
+      =(((D*C*8.1/10^6) + Wg) * SPAN * 2) + (0.03 * SPAN)
+      โดย  D*C*8.1/1e6 = น้ำหนัก stiffener/m
+           Wg           = น้ำหนักหน้าตัดหลัก/m
+           *2           = 2 girder
+           0.03*SPAN    = น้ำหนัก misc/walkway เพิ่มเติม
+    """
+    W = (((sec['D'] * sec['C'] * 8.1) / 1e6) + sec['Wg']) * SPAN_m * 2 + 0.03 * SPAN_m
+    sec['W_girder'] = W
+    return W
 
 
 def compute_checks(sec, LOAD, SPAN_m, W_HOIST, WHEELBASE_mm):
@@ -261,6 +278,19 @@ def show_results(sec, res):
               delta="เกณฑ์ ≥ 700",
               delta_color="normal" if ok_def else "inverse")
 
+    # ── Weight of double girder
+    W = sec.get('W_girder')
+    if W is not None:
+        st.markdown(
+            f"<div style='background:var(--color-background-secondary);"
+            f"border:1.5px solid var(--color-border-primary);border-radius:8px;"
+            f"padding:12px 22px;margin:10px 0;display:flex;align-items:center;gap:20px'>"
+            f"<span style='font-size:14px;color:var(--color-text-secondary)'>⚖️  น้ำหนัก Double Girder ทั้งหมด</span>"
+            f"<span style='font-size:1.5rem;font-weight:500;color:var(--color-text-primary)'>{W:.3f}  Tons</span>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
     st.divider()
 
     # ── Section + Properties + Moment
@@ -384,6 +414,7 @@ with tab_manual:
                 D=D_in, C=C_in, B2=B2_in,
                 Str=Str_in, Cr=Cr_in, Web=Web_in, x=x_in, Rail=int(Rail_in),
             )
+            compute_weight(sec, SPAN_m)
             res = compute_checks(sec, LOAD, SPAN_m, W_HOIST, WHEELBASE_mm)
             st.divider()
             show_results(sec, res)
@@ -433,6 +464,7 @@ with tab_auto:
                                     Str=Str_in, Cr=Cr_in, Web=Web_in,
                                     x=x_in, Rail=int(Rail_in),
                                 )
+                                compute_weight(sec, SPAN_m)
                                 res = compute_checks(sec, LOAD, SPAN_m, W_HOIST, WHEELBASE_mm)
                                 _, _, _, passed = check_criteria(res)
                                 if passed and sec['Wg'] < best_wg:
